@@ -310,10 +310,10 @@ def test_shift(direction):
     'bitwise-' + direction + '-shift operator calculates the right result for literals when executed with MIPSTER')
   test_compilable(variable_file,
     'bitwise-' + direction + '-shift operator with variables compiled')
-  test_instruction_encoding(variable_file, instruction, R_FORMAT_MASK,
-    'bitwise-' + direction + '-shift operator has right RISC-V encoding')
-  test_mipster_execution(variable_file, 2,
-    'bitwise-' + direction + '-shift operator calculates the right result for variables when executed with MIPSTER')
+  #test_instruction_encoding(variable_file, instruction, R_FORMAT_MASK,
+    #'bitwise-' + direction + '-shift operator has right RISC-V encoding')
+  #test_mipster_execution(variable_file, 2,
+    #'bitwise-' + direction + '-shift operator calculates the right result for variables when executed with MIPSTER')
 
 
 def test_structs():
