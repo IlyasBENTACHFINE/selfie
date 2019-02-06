@@ -384,8 +384,6 @@ uint64_t SYM_LT           = 24; // <
 uint64_t SYM_LEQ          = 25; // <=
 uint64_t SYM_GT           = 26; // >
 uint64_t SYM_GEQ          = 27; // >=
-uint64_t SYM_SRL          = 31; // >>
-uint64_t SYM_SLL          = 32; // <<
 
 // symbols for bootstrapping
 
@@ -591,7 +589,6 @@ uint64_t is_literal();
 uint64_t is_star_or_div_or_modulo();
 uint64_t is_plus_or_minus();
 uint64_t is_comparison();
-uint64_t is_sll_or_srl();
 
 uint64_t look_for_factor();
 uint64_t look_for_statement();
@@ -619,7 +616,6 @@ uint64_t compile_call(char* procedure);
 uint64_t compile_factor();
 uint64_t compile_term();
 uint64_t compile_simple_expression();
-uint64_t compile_bitwise_expression();
 uint64_t compile_expression();
 void     compile_while();
 void     compile_if();
@@ -830,8 +826,6 @@ uint64_t F3_SD    = 3; // 011
 uint64_t F3_BEQ   = 0; // 000
 uint64_t F3_JALR  = 0; // 000
 uint64_t F3_ECALL = 0; // 000
-uint64_t F3_SLL   = 1; // 000
-uint64_t F3_SRL   = 5; // 000
 
 // f7-codes
 uint64_t F7_ADD  = 0;  // 0000000
@@ -840,8 +834,6 @@ uint64_t F7_SUB  = 32; // 0100000
 uint64_t F7_DIVU = 1;  // 0000001
 uint64_t F7_REMU = 1;  // 0000001
 uint64_t F7_SLTU = 0;  // 0000000
-uint64_t F7_SRL  = 0; // 0000000
-uint64_t F7_SLL  = 0; // 0000000
 
 // f12-codes (immediates)
 uint64_t F12_ECALL = 0; // 000000000000
@@ -879,8 +871,6 @@ void emit_nop();
 
 void emit_lui(uint64_t rd, uint64_t immediate);
 void emit_addi(uint64_t rd, uint64_t rs1, uint64_t immediate);
-void emit_sll(uint64_t rd, uint64_t rs1, uint64_t immediate);
-void emit_srl(uint64_t rd, uint64_t rs1, uint64_t immediate);
 
 void emit_add(uint64_t rd, uint64_t rs1, uint64_t rs2);
 void emit_sub(uint64_t rd, uint64_t rs1, uint64_t rs2);
@@ -2894,11 +2884,6 @@ void get_symbol() {
 
       } else if (character == CHAR_LT) {
         get_character();
-                if (character == CHAR_LT) {
-          get_character();
-
-          symbol = SYM_SLL;
-        } else
 
         if (character == CHAR_EQUAL) {
           get_character();
@@ -2909,13 +2894,6 @@ void get_symbol() {
 
       } else if (character == CHAR_GT) {
         get_character();
-
-         if (character == CHAR_GT) {
-          get_character();
-
-          symbol = SYM_SRL;
-        } else
-
 
         if (character == CHAR_EQUAL) {
           get_character();
@@ -3160,15 +3138,6 @@ uint64_t is_plus_or_minus() {
   if (symbol == SYM_MINUS)
     return 1;
   else if (symbol == SYM_PLUS)
-    return 1;
-  else
-    return 0;
-}
-
-uint64_t is_sll_or_srl() {
-  if (symbol == SYM_SLL)
-    return 1;
-  else if (symbol == SYM_SRL)
     return 1;
   else
     return 0;
@@ -3924,9 +3893,7 @@ uint64_t compile_simple_expression() {
   return ltype;
 }
 
-
-
-uint64_t compile_bitwise_expression() {
+uint64_t compile_expression() {
   uint64_t ltype;
   uint64_t operator_symbol;
   uint64_t rtype;
@@ -3937,85 +3904,13 @@ uint64_t compile_bitwise_expression() {
 
   // assert: allocated_temporaries == n + 1
 
-  // + or - ?
-  while (is_sll_or_srl()) {
-    operator_symbol = symbol;
-
-    get_symbol();
-
-    rtype = compile_simple_expression();
-
-    // assert: allocated_temporaries == n + 2
-
-    if (operator_symbol == SYM_SLL) {
-      if (ltype == UINT64STAR_T) {
-        if (rtype == UINT64_T)
-          // UINT64STAR_T + UINT64_T
-          // pointer arithmetic: factor of 2^3 of integer operand
-          emit_left_shift_by(current_temporary(), 3);
-        else
-          // UINT64STAR_T + UINT64STAR_T
-          syntax_error_message("(uint64_t*) + (uint64_t*) is undefined");
-      } else if (rtype == UINT64STAR_T) {
-        // UINT64_T + UINT64STAR_T
-        // pointer arithmetic: factor of 2^3 of integer operand
-        emit_left_shift_by(previous_temporary(), 3);
-
-        ltype = UINT64STAR_T;
-      }
-
-      emit_sll(previous_temporary(), previous_temporary(), current_temporary());
-
-    } else if (operator_symbol == SYM_SRL) {
-      if (ltype == UINT64STAR_T) {
-        if (rtype == UINT64_T) {
-          // UINT64STAR_T - UINT64_T
-          // pointer arithmetic: factor of 2^3 of integer operand
-          emit_left_shift_by(current_temporary(), 3);
-          emit_sub(previous_temporary(), previous_temporary(), current_temporary());
-        } else {
-          // UINT64STAR_T - UINT64STAR_T
-          // pointer arithmetic: (left_term - right_term) / SIZEOFUINT64
-          emit_sub(previous_temporary(), previous_temporary(), current_temporary());
-          emit_addi(current_temporary(), REG_ZR, SIZEOFUINT64);
-          emit_divu(previous_temporary(), previous_temporary(), current_temporary());
-
-          ltype = UINT64_T;
-        }
-      } else if (rtype == UINT64STAR_T)
-        // UINT64_T - UINT64STAR_T
-        syntax_error_message("(uint64_t) - (uint64_t*) is undefined");
-      else
-        // UINT64_T - UINT64_T
-        emit_srl(previous_temporary(), previous_temporary(), current_temporary());
-    }
-
-    tfree(1);
-  }
-
-  // assert: allocated_temporaries == n + 1
-
-  return ltype;
-}
-
-uint64_t compile_expression() {
-  uint64_t ltype;
-  uint64_t operator_symbol;
-  uint64_t rtype;
-
-  // assert: n = allocated_temporaries
-
-  ltype = compile_bitwise_expression();
-
-  // assert: allocated_temporaries == n + 1
-
   //optional: ==, !=, <, >, <=, >= simple_expression
   if (is_comparison()) {
     operator_symbol = symbol;
 
     get_symbol();
 
-    rtype = compile_bitwise_expression();
+    rtype = compile_simple_expression();
 
     // assert: allocated_temporaries == n + 2
 
@@ -5516,18 +5411,6 @@ void emit_addi(uint64_t rd, uint64_t rs1, uint64_t immediate) {
 }
 
 void emit_add(uint64_t rd, uint64_t rs1, uint64_t rs2) {
-  emit_instruction(encode_r_format(F7_ADD, rs2, rs1, F3_ADD, rd, OP_OP));
-
-  ic_add = ic_add + 1;
-}
-
-
-void emit_sll(uint64_t rd, uint64_t rs1, uint64_t rs2) {
-  emit_instruction(encode_r_format(F7_ADD, rs2, rs1, F3_ADD, rd, OP_OP));
-
-  ic_add = ic_add + 1;
-}
-void emit_srl(uint64_t rd, uint64_t rs1, uint64_t rs2) {
   emit_instruction(encode_r_format(F7_ADD, rs2, rs1, F3_ADD, rd, OP_OP));
 
   ic_add = ic_add + 1;

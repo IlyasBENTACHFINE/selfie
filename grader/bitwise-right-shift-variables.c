@@ -4,6 +4,6 @@ uint64_t main(uint64_t argc, uint64_t* argv) {
 
   a = 4;
   b = 1;
-
-  return a >> b;
+	
+	return a << b;
 }
